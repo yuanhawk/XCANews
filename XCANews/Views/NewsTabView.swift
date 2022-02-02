@@ -15,12 +15,10 @@ struct NewsTabView: View {
         NavigationView {
             ArticleListView(articles: articles)
                 .overlay(overlayView)
-                .onAppear {
-                    Task {
-                        await articleNewsVM.loadArticles()
-                    }
-                }
-                .navigationTitle(articleNewsVM.selectedCategory.text)
+                .task(id: articleNewsVM.fetchTaskToken, loadTask)
+                .refreshable(action: refreshTask)
+                .navigationTitle(articleNewsVM.fetchTaskToken.category.text)
+                .navigationBarItems(trailing: menu)
         }
     }
     
@@ -31,9 +29,7 @@ struct NewsTabView: View {
         case .success(let articles) where articles.isEmpty:
             EmptyPlaceholderView(text: "No Articles", image: nil)
         case .failure(let error):
-            RetryView(text: error.localizedDescription) {
-                
-            }
+            RetryView(text: error.localizedDescription, retryAction: refreshTask)
         default: EmptyView()
         }
     }
@@ -45,10 +41,37 @@ struct NewsTabView: View {
             return []
         }
     }
+    
+    @Sendable
+    private func loadTask() async -> Void {
+        await articleNewsVM.loadArticles()
+    }
+    
+    @Sendable
+    private func refreshTask() {
+        articleNewsVM.fetchTaskToken = FetchTaskToken(category: articleNewsVM.fetchTaskToken.category, token: Date())
+    }
+    
+    private var menu: some View {
+        Menu {
+            Picker("Category", selection: $articleNewsVM.fetchTaskToken.category) {
+                ForEach(Category.allCases) {
+                    Text($0.text).tag($0 )
+                }
+            }
+        } label: {
+            Image(systemName: "fibrechannel")
+                .imageScale(.large)
+        }
+    }
 }
 
 struct NewsTabView_Previews: PreviewProvider {
+    
+    @StateObject static var articleBookmarkVM = ArticleBookmarkViewModel.shared
+    
     static var previews: some View {
         NewsTabView(articleNewsVM: ArticleNewsViewModel(articles: Article.previewData))
+            .environmentObject(articleBookmarkVM)
     }
 }
